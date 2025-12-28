@@ -1,0 +1,158 @@
+
+// USAGE
+// upload to the seaboard M with either ROLI-Dashboard
+// or the the software from here: https://github.com/agraef/myblocks
+//
+// Settings:
+// Octave: < >
+// MIDI channel: SHIFT + Notes C' to E''
+// Hardness: SHIFT + Notes F'' to B''
+
+// Vars
+float pitch;
+int channel, pitching, playing, after, blocksize, octave, velocity;
+bool pressed;
+
+// Initializer
+void initialise()
+{
+    blocksize = 24;
+    for (int i = 0; i < blocksize; ++i)
+    {
+        setHeapByte(i, 0);
+    }
+
+    channel = 8;
+    pressed = false;
+    pitching = 0;
+    playing = 0;
+    pitch = 0;
+    after = 0;
+    octave = 48;
+    velocity = 30;
+}
+
+// structure to save the active notes for note-off
+int getNote(int index)
+{
+    if (index < blocksize)
+        return getHeapByte(index);
+    else
+        return 0;
+}
+
+// structure to save the active notes for note-off
+void setNote(int index, int value)
+{
+    if (index < blocksize)
+        setHeapByte(index, value);
+}
+
+// Handle the settings
+bool handleSettings(int note, float x, float y, float z) {
+
+    // is the left button pressed?
+    if( pressed ) {
+        int c = note - octave;
+        if( c >= 0 && c < 16 ) {
+            // set the midi channesl
+            channel = c;
+        } else if( c > 17 && c < 25 ) {
+            // set the velocity
+            velocity = int( map( float(c), 18.0, 24.0, 0.0, 127.0 ));
+        }
+        return true;
+    }
+
+    // octave up/down
+    if( y*1000 < 200 ) {
+        if( x * 1000 < 200 ) {
+            octave = max(octave - 12, 24);
+            return true;
+        }
+        if( x * 1000 > 5800 ) {
+            octave = min(octave + 12, 96);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void touchStart(int index, float x, float y, float z, float vz)
+{
+    playing++;
+
+    float xx = map(x, 0.0, 6.0, 0.0, 27.0);
+    if (int(xx) >= 5 && int(xx) < 13)
+    {
+        xx = xx - 1;
+    }
+    else if (int(xx) >= 13 && int(xx) < 19)
+    {
+        xx = xx - 2;
+    }
+    else if (int(xx) >= 19)
+    {
+        xx = xx - 3;
+    }
+
+    int note = int(xx) + octave;
+
+    // are there settings to handle?
+    if( handleSettings(note, x, y, z) ) {
+        return;
+    }
+
+    int vx = min(int(float(velocity) + z * float(127-velocity)), 127);
+    setNote(index, note);
+    sendNoteOn(channel, note, vx);
+
+    // save the start coordinate for pitch bend
+    pitch = x;
+    pitching = index;
+}
+
+void touchEnd(int index, float x, float y, float z, float vz)
+{
+    playing--;
+
+    int zz = getNote(index);
+    setNote(index, 0);
+    sendNoteOff(channel, zz, 100);
+
+    if (playing == 0) {
+        sendChannelPressure(channel, 0);
+    }
+
+    if (pitching == index)
+    {
+        pitching = 0;
+    }
+}
+
+void touchMove(int index, float x, float y, float z, float vz)
+{
+    // only the last pressed note is pitching
+    if (pitching == index)
+    {
+        int ppx = int((8192.0 + (x - pitch) * 1024.0));
+        sendPitchBend(channel, clamp(0, 16383, ppx));
+    }
+
+    after = (after + int(z * 127)) / 2;
+    sendChannelPressure(channel, after);
+}
+
+void handleButtonDown (int index) {
+    pressed = true;
+}
+
+void handleButtonUp (int index) {
+    pressed = false;
+}
+
+void repaint()
+{
+
+}
