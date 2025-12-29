@@ -9,7 +9,7 @@
 // Hardness: SHIFT + Notes F'' to B''
 
 // Vars
-float pitch;
+float pitch, modulation;
 int channel, pitching, playing, after, blocksize, octave, velocity;
 bool pressed;
 
@@ -27,6 +27,9 @@ void initialise()
     pitching = 0;
     playing = 0;
     pitch = 0;
+
+    modulation = 0;
+
     after = 0;
     octave = 48;
     velocity = 30;
@@ -110,6 +113,7 @@ void touchStart(int index, float x, float y, float z, float vz)
 
     // save the start coordinate for pitch bend
     pitch = x;
+    modulation = y;
     pitching = index;
 }
 
@@ -123,6 +127,7 @@ void touchEnd(int index, float x, float y, float z, float vz)
 
     if (playing == 0) {
         sendChannelPressure(channel, 0);
+        //sendCC(channel, 1, 0);
     }
 
     if (pitching == index)
@@ -138,10 +143,14 @@ void touchMove(int index, float x, float y, float z, float vz)
     {
         int ppx = int((8192.0 + (x - pitch) * 1024.0));
         sendPitchBend(channel, clamp(0, 16383, ppx));
+
+        float yy = map(y, 0.0, 3.0, 0.0, 127.0);
+        sendCC(channel, 1, 127-int(yy));
     }
 
     after = (after + int(z * 127)) / 2;
     sendChannelPressure(channel, after);
+
 }
 
 void handleButtonDown (int index) {
